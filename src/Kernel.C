@@ -1,15 +1,9 @@
 #include <stdint.h>
 #include <stddef.h>
-#include <limine.h>
  
 // The Limine requests can be placed anywhere, but it is important that
 // the compiler does not optimise them away, so, usually, they should
 // be made volatile or equivalent.
- 
-static volatile struct limine_framebuffer_request framebuffer_request = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = 0
-};
  
 // GCC and Clang reserve the right to generate calls to the following
 // 4 functions even if they are not directly called.
@@ -75,16 +69,6 @@ static void hcf(void) {
         asm ("hlt");
     }
 }
- 
-// The following will be our kernel's entry point.
-// If renaming _start() to something else, make sure to change the
-// linker script accordingly.
-void _start(void) {
-    write_string(7, "Hello World!")
- 
-    // We're done, just hang...
-    hcf();
-}
 
 // note this example will always write to the top
 // line of the screen
@@ -96,4 +80,14 @@ void write_string( int colour, const char *string )
         *video++ = *string++;
         *video++ = colour;
     }
+}
+ 
+// The following will be our kernel's entry point.
+// If renaming _start() to something else, make sure to change the
+// linker script accordingly.
+void _start(void) {
+    write_string(7, "Hello World!");
+ 
+    // We're done, just hang...
+    hcf();
 }
