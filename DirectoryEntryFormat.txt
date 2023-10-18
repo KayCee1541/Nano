@@ -1,0 +1,40 @@
+OFFSET | LENGTH | INFO
+----------------------
+0x00   | 2      | File ID (0 is reserved as root directory, table starts at 1, boot2 has ID of 1)
+0x02   | 8      | File name, padded with spaces
+0x0A   | 3      | File extension
+0x0D   | 1      | File flags
+       |        | 0x01 Read Only
+       |        | 0x02 Hidden
+       |        | 0x04 Access Level 
+       |        | 0x08 Access Level (0 for user, 1 for admin, 2 for kernel, 3 for system. 
+       |        |                   If directory, determines the access level required to read files in directory)
+       |        | 0x10 Directory
+       |        | 0x20 Non-Deletable
+       |        | 0x40 Device
+       |        | 0x80 Free (Entry is unused)
+0x0E   | 1      | Extra flags
+       |        | 0x01 Open
+       |        | 0x02 Read requires password
+       |        | 0x04 Write requires password
+       |        | 0x08 Delete requires password
+       |        | 0x10 Owner read only
+       |        | 0x20 Owner write only
+       |        | 0x40 Owner delete only
+       |        | 0x80 Corrupted
+0x10   | 1      | Time of creation in 0.01th of a second (ranges from 0-200)
+0x11   | 2      | Time of creation
+       |	| 0-4   Seconds/2
+       |	| 5-10  Minutes
+       |	| 11-15 Hours
+0x12   | 2      | Date of creation
+       |	| 0-4   Day
+       |	| 5-8   Month
+       |        | 9-15  Year (0=1980, 119=2099)
+0x13   | 1      | Owner ID (0, 128 = system, bit 0x80 set to differentiate between user and group)
+0x14   | 2      | Id of containing directory (root is 0)
+0x16   | 2      | File starting cluster
+0x18   | 2      | File size (in # of clusters)
+0x1A   | 2      | Last modified time
+0x1C   | 2      | Last modified date
+0x1E   | 1      | Unused, may be accessed by software (Boot2 magic number stored here "2")

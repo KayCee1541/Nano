@@ -1,3 +1,6 @@
+; BOOT1 CAN ONLY READ UP TO SECTOR 65535, DO NOT PUT STAGE 2 ANY HIGHER THAN 65535
+
+
 bits 16
 org 0x7c00
 
@@ -25,6 +28,16 @@ VOLID_SN: db 0x00, 0x00, 0x00, 0x00 ; volumeid serial number, unused
 VOL_LABL: db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ; volume label, unused
 FAT_LABL: db "fat16", 0x20, 0x20, 0x20 ; label for FAT type, for redundancy
 
+; resrved sectors goes until sector 2
+; FATs goes from sector 2 until sector 514
+; directory table goes from sector 516 until sector 4612
+jmp start ; jump over error code and hex buffer
+
+ERR_CODE: db 0,0,0
+HEX_BUFF: db "0123456789ABCDEF", 0
+
+start:
+
 mov ah, 0
 mov al,03h ; set video mode to be 80x25 video
 int 10h
@@ -37,14 +50,14 @@ clearscreen:
     mov ax, 0xb800
     mov es, ax
     xor ax, ax
-    mov si, ax
+    mov di, ax
     mov bx, ax
     mov al, " "
     mov ah, 0x00
 .loop:
     mov cx, 2000
-    mov word[es:si], ax
-    add si, 2
+    mov word[es:di], ax
+    add di, 2
     inc bx
     sub cx, bx
     jz .end
@@ -57,7 +70,7 @@ xor ax, ax
 mov bx, ax
 mov cx, ax
 mov dx, ax
-mov si, ax
+mov di, ax
 mov ss, ax
 mov ds, ax
 mov es, ax ; set registers to 0
@@ -76,7 +89,6 @@ halt:
 
 print:
     ; cx will be the address of the message we want to print, make sure to save cx before destroying it
-    push si
     push bx
     push es
     push di
@@ -88,11 +100,11 @@ print:
     xor bx, bx
     xor ax, ax
 
-    mov si, TERM_ROW
-    mov al, byte[si]
+    mov di, TERM_ROW
+    mov al, byte[di]
     mov bl, 160
     mul bl
-    mov si, ax
+    mov di, ax
     xor ax, ax
     xor bx, bx
 
@@ -121,90 +133,141 @@ print:
     ; F = white
     ; color goes bg:fg
 .loop:
-    push si
+    push di
 
-    mov si, cx
-    mov al, byte [si + bx] ; move character at index bx in the string to al
+    mov di, cx
+    mov al, byte [di + bx] ; move character at index bx in the string to al
     mov ah, 07h ; set color to black and white
 
-    pop si 
+    pop di 
     or al, al ; check if the loaded character is null
     jz .end ; if so, jump to .end
 
-    mov word [es:si],ax ; if not, write the character to proper memory location
-    inc si ; increment address
-    inc si
+    mov word [es:di],ax ; if not, write the character to proper memory location
+    add di, 2 ; increment address
     inc bx
     jmp .loop ; do it all over again
 
 .end:
     mov ax, 0
     mov es, ax
-    mov si, TERM_ROW
-    mov al, byte[si]
+    mov di, TERM_ROW
+    mov al, byte[di]
     inc al
-    mov byte[es:si], al
+    mov byte[es:di], al
 
     pop ax
     pop di
     pop es
     pop bx
-    pop si
 
     ret
 
 read_disk:
-    push ax
-    push bx
-    push cx
-    push dx
-    push es
-    push di
 
-    ; check if disk drive extensions are supported
-    db 0xf8 ; clear carry flag
-    mov ah, 41h
-    mov bx, 55AAh
-    mov dl, 80h
+    xor ax, ax ; make sure AX is cleared in case error occurs
+
+    ; get drive parameters
+    mov es, ax
+    mov di, ax ; protect in case bios bugs
+    mov ah, 0x08
+    mov dl, 0x80
     int 13h
 
-    jc .error2
+    jc error ; jump if error occurs
+    add ah, 0
+    jnz error ; jump if status code is not 0
+    
+    ; write drive params to memory
+    and cl, 0x3f
+    mov byte[SEC_TRCK], cl
+    inc dh
+    mov byte[NUM_HEAD], dh
 
-    jmp .error1
+    clc ; load stage 1.5 into memory
+    mov ax, 1
+    call LBAtoCHS
+    mov al, 1
+    mov dl, 0x80
+    mov bx, 0
+    mov es, bx
+    mov bx, 0x7e00
+    int 13h
 
-    db 0xf8 ; clear carry flag
+    jc error ; jump if error occurs
+    add ah, 0
+    jnz error ; jump if status code is not 0
 
-    pop di
-    pop es
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
+    
 
-.error1:
+error:
+    mov al, ah
+    mov ah, 0 ; transfer error code into al and zero ah
+
     mov cx, DISK_ERROR1
     call print
+
+    call btohex
+    mov cx, ERR_CODE
+    call print
     ret
 
-.error2:
-    mov cx, DISK_ERROR2
-    call print
+; takes al as input
+btohex:
+    xor bx, bx
+    mov bl, 16
+    div bl
+    ; get byte value of al in two hex values stored in ah and al
 
-    db 0xf8 ; clear carry flag
+    mov si, HEX_BUFF
+    mov bl, ah
+    mov ch, byte[si + bx]
+    mov bl, al
+    mov cl, byte[si + bx]
+    mov word[ERR_CODE], cx ; move those values into the error code pointer
+
     ret
 
-.error3:
-    mov cx, DISK_ERROR3
-    call print
+; takes ax as input
+LBAtoCHS:
+    inc ax ; get it so sector 1 = lba 1
+    mov dl, 0
+    mov ch, 0
+    mov cl, 0
+    mov bl, byte[SEC_TRCK]
+    mov bh, 0
+
+.loop:
+    cmp ax, bx ; if comparison is negative, we have completed the process
+    js .end
+
+    sub ax, bx ; subtract sec_trck from ax
+    inc dl
+    cmp dl, byte[NUM_HEAD]
+    jz .loop2
+    jmp .loop
+
+.loop2:
+    mov dl, 0
+    inc ch
+    jmp .loop
+
+.end:
+    mov cl, al ; ax should be zero, therefore ax=al
+    mov ax, 0
+    clc ; clear carry to prevent false error
     ret
 
 TERM_ROW: db 0
 BOOT_MSG: db "Booting...", 0
-DISK_INFO1: db "Getting disk info...",0
-DISK_ERROR1: db "DISK ERROR", 0
-DISK_ERROR2: db "BIOS STATES LBA NOT SUPPORTED, ATTEMPTING TO FORCE...", 0
-DISK_ERROR3: db "COULDN'T READ DISK INFO, STOPPING...", 0
-BLANK: db 0
+DISK_INFO: db "Found s2, Loading..."
+DISK_ERROR1: db "ERR:BOOT ERR", 0
+START_CLUS: db 0, 0
+SECT_COUNT: db 0, 0
 times 510-($-$$) db 0 ; fill rest of sector with 0's
 db 0x55, 0xAA
+; -------------- end of boot1, start of boot1.5
+
+mov cx, DISK_INFO
+call print
+call halt
