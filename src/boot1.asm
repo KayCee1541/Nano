@@ -388,7 +388,7 @@ LoadS2:
     mov bx, 0
     mov word[ClusterTableIndex], bx
 
-    mov bx, 0x8000
+    mov bx, 0x9000
     mov word[Load_Loc], bx
     mov si, Cluster_Table
 
@@ -421,8 +421,23 @@ LoadS2:
     jmp .loop
 
 .end:
-    mov ax, word [TERM_ROW]
-    jmp 0x8000
+    mov bx, 0x8200
+    mov si, bx
+    mov bx, 0
+
+    mov ax, Clus_Sect
+    mov word[si + bx], ax
+    add bx, 2
+
+    mov ax, print
+    mov word[si + bx], ax
+    add bx, 2
+
+    mov ax, LBAtoCHS
+    mov word[si + bx], ax
+    add bx, 2
+
+    jmp 0x9000
 
 ; takes ax as input, outputs ax
 Clus_Sect:
@@ -437,3 +452,4 @@ ClusterTableIndex: db 0, 0
 Load_Loc: db 0, 0
 Cluster_Table: db 0
 times 1024-($-$$) db 0 ; make sure we stay within the sector
+; environment variables will be passed to staget 2 at 0x8200
