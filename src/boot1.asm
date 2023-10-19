@@ -1,5 +1,5 @@
 ; BOOT1 CAN ONLY READ UP TO SECTOR 65535, DO NOT PUT STAGE 2 ANY HIGHER THAN 65535
-
+; NO TOUCHY! I WORK! ONLY TOUCHIE IF I BREAKIE OR YOU CAN MAKE ME BETTER, IN WHICH CASE PLEASE TOUCH ME!
 
 bits 16
 org 0x7c00
@@ -187,18 +187,65 @@ read_disk:
     clc ; load stage 1.5 into memory
     mov ax, 1
     call LBAtoCHS
-    mov al, 1
-    mov dl, 0x80
+    mov ah, 02
+    mov al, 1 ; read 1 sector
+    mov dl, 0x80 ; in drive 0x80
     mov bx, 0
     mov es, bx
-    mov bx, 0x7e00
+    mov bx, 0x7e00 ; load data to 0000:7e00
     int 13h
 
     jc error ; jump if error occurs
     add ah, 0
     jnz error ; jump if status code is not 0
 
-    
+    mov word[SECT_COUNT], 516
+
+.loop:
+    clc
+    mov ax, word[SECT_COUNT] ; load start of DT
+    cmp ax, 4612 ; check if index has reached the end of DT
+    jz .error1
+    call LBAtoCHS
+    mov ah, 02
+    mov al, 32 ; load 32 sectors, end of data = 0xD000
+    mov dl, 0x80
+    mov bx, 0
+    mov es, bx
+    mov bx, 0x9000
+    int 13h
+
+    jc error ; jump if error occurs
+    add ah, 0
+    jnz error ; jump if status code is not 0
+
+    mov ax, word[SECT_COUNT]
+    add ax, 32
+    mov word[SECT_COUNT], ax ; increment SECT_COUNT by 32
+    mov dx, 0x9000 ; set si to where data was loaded
+    mov si, dx
+
+.dtscan:
+    cmp si, 0xD000
+    jz .loop ; check if si has reached the end of loaded DT
+    mov bx, 31 ; last byte of DT entry
+    mov cl, byte[si + bx]
+    cmp cl, 0x32 ; check if entry contains magic number
+    jz .found
+
+    add si, 32 ; go to next entry
+    jmp .dtscan
+
+.found:
+    mov bx, 0x17
+    mov cx, word[si + bx]
+    mov word[START_CLUS], cx
+
+    ; running out of space, go to stage 1.5
+    jmp 0x7e00
+
+.error1:
+    mov ah, 0xf0 ; 0xf0 = boot2 not found in DT
 
 error:
     mov al, ah
@@ -230,37 +277,37 @@ btohex:
 
 ; takes ax as input
 LBAtoCHS:
-    inc ax ; get it so sector 1 = lba 1
-    mov dl, 0
-    mov ch, 0
-    mov cl, 0
-    mov bl, byte[SEC_TRCK]
+    inc ax
     mov bh, 0
+    mov bl, byte[SEC_TRCK]
+    mov dh, 0
+    mov ch, 0
 
-.loop:
-    cmp ax, bx ; if comparison is negative, we have completed the process
-    js .end
+.while: ; while
+    cmp ax, bx ; ax (lba) - bx (spt)
+    js .end 
+    jz .end ; > 0
 
-    sub ax, bx ; subtract sec_trck from ax
-    inc dl
-    cmp dl, byte[NUM_HEAD]
-    jz .loop2
-    jmp .loop
+    sub ax, bx ; ax (lba) = ax (lba) - bx (spt)
+    inc dh ; head += 1
 
-.loop2:
-    mov dl, 0
-    inc ch
-    jmp .loop
+    cmp dh, byte[NUM_HEAD] ; if 
+    jz .branch ; dh (head) == HPC
+
+    jmp .while
+
+.branch:
+    mov dh, 0 ; dh (head) = 0
+    inc ch ; ch (cylinder) += 1
+    jmp .while
 
 .end:
-    mov cl, al ; ax should be zero, therefore ax=al
-    mov ax, 0
-    clc ; clear carry to prevent false error
+    mov cl, al ; cl (sector) = ax (lba) (ah should be 0 at this point, so ax = ah)
     ret
 
 TERM_ROW: db 0
 BOOT_MSG: db "Booting...", 0
-DISK_INFO: db "Found s2, Loading..."
+DISK_INFO: db "Found s2, Loading...", 0
 DISK_ERROR1: db "ERR:BOOT ERR", 0
 START_CLUS: db 0, 0
 SECT_COUNT: db 0, 0
@@ -270,4 +317,123 @@ db 0x55, 0xAA
 
 mov cx, DISK_INFO
 call print
-call halt
+
+FAT_LOOKUP:
+    mov ax, 2 ; start of fat1
+    mov word[SECT_COUNT], ax
+
+.loop:
+    clc
+    mov ax, word[SECT_COUNT] 
+    cmp ax, 258 ; check if index has reached the end of FAT1
+    jz .error1
+    call LBAtoCHS
+    mov ah, 02
+    mov al, 32 ; load 32 sectors, end of data = 0xD000
+    mov dl, 0x80
+    mov bx, 0
+    mov es, bx
+    mov bx, 0x9000
+    int 13h
+
+    jc error ; jump if error occurs
+    add ah, 0
+    jnz error ; jump if status code is not 0
+
+    mov ax, word[SECT_COUNT]
+    add ax, 32
+    mov word[SECT_COUNT], ax ; increment SECT_COUNT by 32
+    mov bx, 0x9000 ; set si to where data was loaded
+    mov si, bx
+
+    mov bx, word[START_CLUS]
+
+.scan:
+    cmp si, 0xD000
+    jz .loop ; check if si has reached the end of loaded data
+    mov cx, word[si]
+    cmp cx, bx ; check if entry is equal to start_clus
+    jz .found
+
+    add si, 2 ; go to next entry
+    jmp .scan
+
+.found:
+    mov cx, word[si]
+    cmp cx, 0xFFFF
+    jz LoadS2 ; check to see if end of FAT entry
+    add cx, 0
+    jz .error2 ; check if entry is corrupted
+
+    push si ; save current FAT entry address
+    mov bx, word[ClusterTableIndex]
+    mov si, Cluster_Table
+    mov word[si + bx], cx ; save entry
+    add bx, 2
+    mov word[ClusterTableIndex], bx
+    pop si ; restore si
+
+    add si, 2 ; go to next FAT entry
+    jmp .found
+
+.error1:
+    mov ah, 0xf1 ; 0xf1 = couldn't find FAT entry
+    jmp error
+
+.error2:
+    mov ah, 0xf2 ; 0xf2 = Entry is corrupted
+    jmp error
+
+LoadS2:
+    mov bx, 0
+    mov word[ClusterTableIndex], bx
+
+    mov bx, 0x8000
+    mov word[Load_Loc], bx
+    mov si, Cluster_Table
+
+.loop:
+    mov bx, word[ClusterTableIndex]
+    mov ax, word[si + bx]
+    add ax, 0
+    jz .end
+    call Clus_Sect
+    call LBAtoCHS
+    mov ah, 2
+    mov al, 4 ; load 1 cluster
+    mov dl, 0x80
+    mov bx, 0
+    mov es, bx
+    mov bx, word[Load_Loc]
+    int 13h
+
+    jc error ; jump if error occurs
+    add ah, 0
+    jnz error ; jump if status code is not 0
+
+    mov bx, word[ClusterTableIndex]
+    add bx, 2
+    mov word[ClusterTableIndex], bx ; increment index by 2
+
+    mov bx, word[Load_Loc]
+    add bx, 2048
+    mov word[Load_Loc], bx ; increment Load location by 4 sectors
+    jmp .loop
+
+.end:
+    mov ax, word [TERM_ROW]
+    jmp 0x8000
+
+; takes ax as input, outputs ax
+Clus_Sect:
+    dec ax ; cluster 1 ranges from sector 0 to sector 3, not sector 4 to sector 7, make sure to account for this
+    push bx
+    mov bx, 4
+    mul bx
+    pop bx ; preserve bx
+    ret
+
+ClusterTableIndex: db 0, 0
+Load_Loc: db 0, 0
+Cluster_Table: db 0
+times 1024-($-$$) db 0 ; make sure we stay within the sector

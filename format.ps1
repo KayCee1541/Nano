@@ -18,7 +18,12 @@ $FirstCluster = 1153 # cluster, not sector number
 
 $boot1bin = [System.IO.File]::ReadAllBytes($boot1)
 $boot2bin = [System.IO.File]::ReadAllBytes($boot2)
-$imagesize = [System.IO.File]::ReadAllBytes($image).Count
+try {
+    $imagesize = [System.IO.File]::ReadAllBytes($image).Count
+}
+catch{
+    exit
+}
 $data = [byte[]]::new($imagesize)
 $index = 0
 
@@ -180,7 +185,7 @@ while (!$found){
 $index = 0
 Write-Output "Writing boot2 data to disk..."
 foreach($i in $boot2clusters){
-    for($j = $i * $clustersize * $SectorSize; $j -lt ($i+1) * $clustersize * $SectorSize; $j++){
+    for($j = ($i-1) * $clustersize * $SectorSize; $j -lt ($i) * $clustersize * $SectorSize; $j++){
         if ($index -gt $boot2bin.Count) {
             $data[$j] = 0
         } else {
