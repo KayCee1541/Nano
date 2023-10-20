@@ -46,4 +46,4 @@ LBAtoCHS:
 CLus_Sect: db 0, 0
 Print: db 0, 0
 LBATOCHS: db 0, 0
-SUCCESS_MSG: db "SUCCESS!", 0
+SUCCESS_MSG: db "Stage 2 loaded, getting ready to load the kernel...", 0

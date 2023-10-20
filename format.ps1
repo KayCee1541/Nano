@@ -50,7 +50,7 @@ $EntryFormat = [byte[]](0, 0, # File ID
                         0, 0, # File size (in # of clusters)
                         0, 0, # Last modified time
                         0, 0, # Last modified date
-                        0)    # Extraneous value, may be used by softeare (boot2 magic number stored here)
+                        0)    # Extraneous value, may be used by software (boot2 magic number stored here)
 
 $RootEntry = [byte[]](0, 0, # File ID
                       82, 79, 79, 84, 68, 73, 82, 32, # File name, padded with spaces
