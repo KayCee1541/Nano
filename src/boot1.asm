@@ -452,4 +452,4 @@ ClusterTableIndex: db 0, 0
 Load_Loc: db 0, 0
 Cluster_Table: db 0
 times 1024-($-$$) db 0 ; make sure we stay within the sector
-; environment variables will be passed to staget 2 at 0x8200
+; environment variables will be passed to stage 2 at 0x8200

@@ -22,8 +22,8 @@ OFFSET | LENGTH | INFO
        |        | 0x20 Owner write only
        |        | 0x40 Owner delete only
        |        | 0x80 Corrupted
-0x10   | 1      | Time of creation in 0.01th of a second (ranges from 0-200)
-0x11   | 2      | Time of creation
+0x0F   | 1      | Time of creation in 0.01th of a second (ranges from 0-200)
+0x10   | 2      | Time of creation
        |	| 0-4   Seconds/2
        |	| 5-10  Minutes
        |	| 11-15 Hours
@@ -31,10 +31,10 @@ OFFSET | LENGTH | INFO
        |	| 0-4   Day
        |	| 5-8   Month
        |        | 9-15  Year (0=1980, 119=2099)
-0x13   | 1      | Owner ID (0, 128 = system, bit 0x80 set to differentiate between user and group)
-0x14   | 2      | Id of containing directory (root is 0)
-0x16   | 2      | File starting cluster
-0x18   | 2      | File size (in # of clusters)
-0x1A   | 2      | Last modified time
-0x1C   | 2      | Last modified date
-0x1E   | 1      | Unused, may be accessed by software (Boot2 magic number stored here "2")
+0x14   | 1      | Owner ID (0, 128 = system, bit 0x80 set to differentiate between user and group)
+0x15   | 2      | Id of containing directory (root is 0)
+0x17   | 2      | File starting cluster
+0x19   | 2      | File size (in # of clusters)
+0x1B   | 2      | Last modified time
+0x1D   | 2      | Last modified date
+0x1F   | 1      | Unused, may be accessed by software (Boot2 magic number stored here "2")
