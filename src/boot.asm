@@ -1,165 +1,226 @@
-bits 16
-org 0x7c00
+[org 0x7c00]
+[CPU 186]
 
-; following info will be filled in by the disk loader
-db 0xeb, 0x19, 0x90 ; jump over disk format info
-OEM_IDEN: db 'nano'
-BYTE_SEC: db 0, 1 ; 512 bytes per sector
+JMP_CODE: times 3 db 0
+OEM_IDEN: times 8 db 0
+BYTE_SEC: times 2 db 0
 SEC_CLUS: db 0
-RES_SECT: db 0, 0
+RES_SECT: times 2 db 0
 NUM_FATS: db 0
-FAT_SIZE: db 0, 0, 0, 0
-NUM_RTDE: db 0, 0
-SEC_COUN: db 0, 0, 0, 0
-MEDIA_DT: db 0
-DRIV_NUM: db 0x80
+NUM_RDES: times 2 db 0
+SEC_COUN: times 2 db 0
+MED_DESC: db 0
+SECT_FAT: times 2 db 0
+SECT_TRK: times 2 db 0
+NUM_HEAD: times 2 db 0
+NUM_HIDN: times 4 db 0
+LRGE_SEC: times 4 db 0
+DRIV_NUM: db 0
+RESERVED: times 6 db 0
+VOL_LBST: times 11 db 0
+SYS_IDST: times 8 db 0
 
+mov byte [DRIV_NUM], dl
 mov bp, 0x7c00
 xor ax, ax
 mov ss, ax
 mov sp, bp ; set up stack
 
-mov ah, 0
-mov al,0x03 ; set video mode to be 80x25 video
-int 10h
+; compute sector number for cluster 0
+mov ax, word [SECT_FAT]
+mul byte [NUM_FATS]
+add ax, word [RES_SECT]
+xor bx, bx
+mov bl, byte [SEC_CLUS]
+sub ax, bx
+mov word [Start_Cluster], ax
 
-; read root directory
-; eax will contain absolute sector number to read, bx will contain number of sectors to read
-; compute number of sectors (1 cluster) first
-mov ax, 1
-mov bx, [SEC_CLUS]
-mul bx
-mov bx, ax
-mov eax, [FAT_SIZE]
-mov bx, [NUM_FATS]
-mul bx
-xor ebx, ebx
-mov bx, [RES_SECT]
-add eax, ebx
-xor cx, cx
-mov es, cx
-mov cx, 0x8020
-mov di, cx
-call ReadDisk
-
-; because we wrote it to 0x8020, we will begin reading from the root directory there
-mov ecx, READ_FILES_RDIR
-call Print
-mov eax, 0x8020
-READ_ROOT_DIRECTORY:
-    mov dl, [eax]
-    or dl, dl
-    jz .end
-    mov ebx, FILENAME_BUFF
-    mov ecx, 8
-    call mcopy
-    mov ebx, FILE_EXT_BUFF
-    mov ecx, 3
-    call mcopy
-    add eax, 24 ; already added 8 during mcopy, then adding another 24 = 32
-    mov ecx, FILENAME_BUFF
-    call Print
-    jmp READ_ROOT_DIRECTORY
-.end:
-
-mov ecx, READ_FILES_END
-call Print
+call Load_File
+jmp 0x7000:0
 
 Halt:
     cli
     hlt
 
-Print: ; ecx = address of null-terminated string to write
-    push ax
-    push bx
-    mov bx, 0x0007 ; bh = 0x00, bl = 0x07. bh = page, bl = color to print
-    mov ah, 0Eh
-.printchar:
-    mov al, [ecx]
+Print: ; si contains address of null-terminated string to print
+    pusha
+    mov ah, 0x0e
+    mov bh, 0
+    mov bl, 0x03
+.loop1:
+    mov al, byte [si]
     or al, al
     jz .end
-    cmp al, 0x0a ; due to a bug, if character is a feedline, we will need to do it manually
-    jmp .newline
-    int 10h
-    inc ecx
-    jmp .printchar
-
-.newline:
-    push eax
-    push ebx
-    push ecx
-    push edx
-    mov ah, 0x03
-    mov bh, 0
-    int 10h ; get cursor position
-    inc dh ; zero out dh
-    xor dl, dl ; zero out dl
-    mov ah, 0x02 ; set cursor position
-    mov bh, 0
-    int 10h
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
-    jmp .printchar
+    int 0x10
+    inc si
+    jmp .loop1
 
 .end:
-    pop bx
-    pop ax
+    popa
     ret
 
-ReadDisk: ; eax = absolute sector number, bx = number of sectors to read, es = segment of transfer buffer, di = offset of transfer buffer.
-    ; Transfer buffer must be 2 byte aligned
-    ; This subroutine will automatically generate the disk address packet
-    ; disk address packet will start at 0x8000
-    push cx
-    mov cl, 16
-    mov [0x8000], cl
-    xor cl, cl
-    mov [0x8001], cl
-    mov [0x8002], bx
-    mov [0x8004], di
-    mov [0x8006], es
-    mov [0x8008], eax
-    xor eax, eax
-    mov [0x800C], eax
-
-    mov ds, ax
-    mov ax, 0x8000
-    mov si, ax
+Read_Disk: ; ax contains LBA of sector, bl contains number of sectors to transfer, es:dx is the address for the transfer buffer
+    pusha
+    mov byte [Disk_Buffer + 2], bl
+    mov word [Disk_Buffer + 4], dx
+    mov word [Disk_Buffer + 6], es
+    mov word [Disk_Buffer + 8], ax
+    mov si, Disk_Buffer
     mov ah, 0x42
-    mov dl, [DRIV_NUM]
-    int 13h
+    mov dl, byte [DRIV_NUM]
+    int 0x13
     jc .error
-    pop cx
+    or ah, ah
+    jnz .error
+    popa
+    ret
+.error:
+    mov si, DRE
+    call Print
+    call Halt
+
+strcomp: ;si = first string address, di = second string address, ax = string length. Sets carry if different
+    pusha
+.loop1:
+    or ax, ax
+    clc
+    jz .same
+    mov bl, byte [ds:si]
+    cmp bl, byte [ds:di]
+    jne .notsame
+    inc si
+    inc di
+    dec ax
+    jmp .loop1
+.notsame:
+    stc
+.same:
+    popa
     ret
 
-.error:
-    mov ecx, DISK_READ_ERR
+Read_Cluster: ; ax contains cluster number, bl contains number of sectors to read, es:dx is the address for the transfer buffer
+    pusha
+    push dx
+    mul byte[SEC_CLUS]
+    pop dx
+    add ax, word [Start_Cluster]
+    call Read_Disk
+    popa
+    ret
+
+Load_File:
+    ; stage 1: load root directory and look for kernel.bin
+    ; stage 2: once found, save staring cluster and load sector of fat and next sector of fat (because the file will have a size less than 256 clusters)
+    ; stage 3: look for starting cluster in fat. Once found, load to 0x70000
+    pusha
+    mov ax, word [Start_Cluster]
+    xor bx, bx
+    mov bl, byte [SEC_CLUS]
+    add ax, bx ; compute root directory cluster number
+    xor dx, dx
+    mov es, dx
+    mov dx, 0x7e00
+    call Read_Disk
+    ; now begin comparing file entries
+    mov si, Kernel_Name
+    mov di, 0x7e00
+    mov ax, 11
+.ScanRootDir:
+    push ax
+    mov ax, word [BYTE_SEC]
+    xor cx, cx
+    mov cl, byte [SEC_CLUS]
+    mul cx
+    add ax, 0x7e00
+    mov cx, ax
+    pop ax
+    cmp di, cx
+    je .NotFound
+    call strcomp
+    jnc .Found
+    add di, 32 ; go to next entry
+    jmp .ScanRootDir
+.Found:
+    add di, 30
+    mov cx, word [ds:di]
+    or cx, cx
+    jnz .FileTooLarge
+    sub di, 4
+    mov cx, word [ds:di]
+    ; cx will contain starting cluster
+    ; we will now load 2 sectors of the FAT and search through it for the starting cluster.
+    ; if we reach the end of the first sector of data, we will load the next sectors. Files should never exceed 64k in size,
+    ; or at most 512 bytes of data.
+    mov ax, word [RES_SECT]
+    mov bl, 2
+    dec ax ; we will increment ax in .LoadFAT, so we need to prematurely decrement it.
+    ; other registers were not modified, so we can directly load the FAT
+    ; Transfer buffer is having issues, so we will rebuild it
+    xor dx, dx
+    mov es, dx
+    mov dx, 0x7e00
+.LoadFAT:
+    inc ax
+    call Read_Disk
+    mov di, 0x7e00
+.ScanFAT:
+    cmp di, 0x8000 ; we are only scanning the first loaded sector, which ends at 0x8000
+    je .LoadFAT
+    cmp cx, word [di]
+    je .LoadClusters
+    add di, 2
+    jmp .ScanFAT
+
+.LoadClusters:
+    mov bl, byte [SEC_CLUS]
+    mov dx, 0x7000
+    mov es, dx
+    xor dx, dx ; set up transfer buffer to load data to where the kernel expects to be in memory
+    ; cx will contain how many bytes we load each time
+    push ax
+    mov ax, word [BYTE_SEC]
+    xor cx, cx
+    mov cl, byte [SEC_CLUS]
+    mul cx
+    mov cx, ax
+    pop ax
+.LoadLoop:
+    mov ax, word [di]
+    cmp ax, 0xffff
+    je .EndLoad
+    call Read_Cluster
+    add dx, cx
+    add di, 2
+    jmp .LoadLoop
+
+.EndLoad:
+    popa
+    ret
+
+.NotFound:
+    mov si, NoKernel
     call Print
     jmp Halt
 
-mcopy: ; eax = source, ebx = destination, ecx = number of bytes to copy
-    push dx
-.loop1:
-    or ecx, ecx
-    jz .end
-    mov dl, [eax]
-    mov [ebx], dl
-    inc eax
-    inc ebx
-    dec ecx
-    jmp .loop1
-.end:
-    pop dx
-    ret
-    
+.FileTooLarge:
+    mov si, KernelTooBig
+    call Print
+    jmp Halt
 
-READ_FILES_RDIR: db "AVAIL. FILES:", 0x0a, 0
-READ_FILES_END: db "ALL FILES LISTED", 0x0a, 0
-DISK_READ_ERR: db "E1", 0
-NO_FILES_FOUND_ERR: db "E2", 0
-FILENAME_BUFF: db 0, 0, 0, 0, 0, 0, 0, 0, "." ; end with period to signify difference between name and extension
-FILE_EXT_BUFF: db 0, 0, 0, 0x0a, 0 ; end with linefeed then null
+NoKernel: db "Kernel Not Found!", 0
+DRE: db "DRE!", 0
+Kernel_Name: db "Kernel  sys"
+KernelTooBig: db "Kernel Too Big!", 0
+Start_Cluster: dw 0
+
+align 16,db 0
+Disk_Buffer:
+    db 0x10
+    db 0
+    dw 0
+    dd 0
+    dd 0
+    dd 0
+
 times 510-($-$$) db 0
 db 0x55, 0xaa

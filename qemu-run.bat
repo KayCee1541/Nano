@@ -1,1 +1,1 @@
-qemu-system-x86_64 -net none -hda disk.img -m 8G
+qemu-system-x86_64 -net none -hda disk.img -m 1M

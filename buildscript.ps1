@@ -1,73 +1,41 @@
-$Files = Get-ChildItem -Path ./src -Recurse -Force -Name
-# clear out build folder
-Get-ChildItem -Path ./build -File -Recurse -Force | foreach { $_.Delete()}
+Get-ChildItem "./build" -Recurse | Remove-Item
 
-# Filter out boot.asm
-$NewArray = @()
-foreach($i in $Files) {
-    if ($i -ne "boot.asm") {
-        $NewArray += $i
-    }
+$SourceFiles = Get-ChildItem -Path ".\src" -Recurse -Name -File -Include "*.asm"
+$MiscFiles = Get-ChildItem -Path ".\src" -Recurse -Name -Exclude "*.asm"
+$Config = @()
+if (Test-Path -Path "./BuildConf.cfg") {
+    $Config = Get-Content -Path "./BuildConf.cfg"
 }
-$Files = $NewArray
 
-# Compile boot.asm prematurely
-nasm -f bin ./src/boot.asm -o ./build/boot.bin
+$FilesHash = @{}
+foreach ($i in $SourceFiles) {
+    $FilesHash[$i] = ($i -Split "\.")[0] + ".bin"
+}
+foreach ($i in $MiscFiles) {
+    $FilesHash[$i] = $i
+}
 
-# Organize source files into respective compile groups
-$CCompiles = @()
-$ASMCompiles = @()
-$OtherFiles = @() # Other files will be copied directly to build directory
-foreach ($i in $Files) {
-    if (($i -split ".")[1] -eq "c") {
-        $CCompiles += $i
-    } elseif (($i -split ".")[1] -eq "asm") {
-        $ASMCompiles += $i
-    } else {
-        $OtherFiles += $i
+foreach ($i in $Config) {
+    if ($FilesHash.ContainsKey($i.Split(' ')[0])) {
+        $FilesHash[$i.Split(' ')[0]] = $i.Split(' ')[1]
     }
 }
 
-# Process source file names into their respective build file names
-$COUTPUTS = @()
-foreach ($i in $CCompiles) {
-    $COUTPUTS += ("build\" + ($i -split ".")[0] + "exc")
+foreach ($i in $SourceFiles) {
+    nasm -f bin (".\src\" + $i) -o (".\build\" + $FilesHash[$i])
 }
 
-$ASMOUTPUTS = $()
-foreach($i in $ASMCompiles) {
-    $ASMOUTPUTS += ("build\" + ($i -split ".")[0] + "exc")
+foreach ($i in $MiscFiles) {
+    Copy-Item (".\src\" + $i) -Destination (".\build\" + $FilesHash[$i])
 }
 
-# Compile C files
-for ($i = 0; $i -lt $CCompiles.Length; $i++) {
-    # Check if file has associated linker file
-    if ($files.Contains(($i -split ".")[0] + "ld")) {
-        $linker = ($i -split ".")[0] + "ld"
-        wsl gcc -march=x86_64 -nostartfiles -nostdlib -ffreestanding -nodefaultlibs -T $linker -Wall -Wextra -c $CCompiles[$i] -o $COUTPUTS[$i]
-    }
-    else {
-        wsl gcc -march=x86_64 -nostartfiles -nostdlib -ffreestanding -nodefaultlibs -Wall -Wextra -c $CCompiles[$i] -o $COUTPUTS[$i]
+$Fat16_MBR = Get-Content -Path ./fat16_MBR.bin -AsByteStream -Raw
+$BootLoader = Get-Content -Path ./build/boot.bin -AsByteStream -Raw
+
+for ($i = 0; $i -lt $Fat16_MBR.Length; $i++){
+    if ($Fat16_MBR[$i] -ne 0) {
+        $BootLoader[$i] = $Fat16_MBR[$i]
     }
 }
 
-# Compile ASM files
-for ($i = 0; $i -lt $ASMCompiles.Length; $i++) {
-    # Check if file has associated linker file
-    if ($files.Contains(($i -split ".")[0] + "ld")) {
-        $linker = ($i -split ".")[0] + "ld"
-        $output = ($i -split ".")[0] + "o"
-        nasm $ASMCompiles[$i] $output
-        gcc ld $output -T $linker -o $ASMOUTPUTS[$i]
-        Remove-Item $output
-    }
-    else {
-        nasm -f elf64 $ASMCompiles[$i] -o $ASMOUTPUTS[$i]
-    }
-}
-
-foreach ($i in $OtherFiles) {
-    $destination = ".\build\" + $i
-    $i = ".\src\" + $i
-    Copy-Item $i -Destination $destination
-}
+[System.IO.File]::WriteAllBytes("./build/boot.bin", $BootLoader)

@@ -1,0 +1,14 @@
+0x80    SYSCALL
+    al = syscall function
+
+0x81    DRAW CHARACTER
+    ah = color for character
+    al = ascii code for character
+    bh = Y position
+    bl = X position
+    returns: al
+    0x00 = Success
+    0x01 = Invalid position
+
+0xF0    KERNEL PANIC
+    al = error code
