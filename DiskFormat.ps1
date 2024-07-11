@@ -70,8 +70,11 @@ foreach ($i in $Files) {
 
     # Write file size to directory entry
     $Directory_Entry[11] = (Get-ItemProperty -Path (".\" + $i)).attributes.Value__
-    if ($Ext = "sys") {
-        $Directory_Entry[11] = $Directory_Entry[11] -bor 0x04
+    if ($Ext.ToLower() -eq "sys") {
+        $Directory_Entry[11] = $Directory_Entry[11] -bor 0x04 -bor 0x40 # bit 40 will represent the file being executable
+    }
+    if ($Ext.ToLower() -eq "bin") {
+        $Directory_Entry[11] = $Directory_Entry[11] -bor 0x40 # bit 40 will represent the file being executable
     }
     for ($j = 0; $j -lt 4; $j++) {
         $Directory_Entry[28 + $j] = [byte] ($FileSize -shr (8*$j) -band 0xFF)
@@ -113,7 +116,7 @@ foreach ($i in $Files) {
     $FileData += [byte[]](0) * (($FileClustersNum * $Bytes_Sector * $Sectors_Cluster) - $FileSize)
     foreach($j in $ClustersChain) {
         for ($k = 0; $k -lt ($Bytes_Sector * $Sectors_Cluster); $k++) {
-            $Disk[($ClusterZero + $j * $Sectors_Cluster) * $Bytes_Sector + $j + $k] = $FileData[$FileDataPointer]
+            $Disk[($ClusterZero + $j * $Sectors_Cluster) * $Bytes_Sector + $k] = $FileData[$FileDataPointer]
             $FileDataPointer++
         }
     }

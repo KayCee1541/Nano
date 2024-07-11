@@ -1,5 +1,5 @@
 [org 0x7c00]
-[CPU 186]
+[CPU 286]
 
 JMP_CODE: times 3 db 0
 OEM_IDEN: times 8 db 0
@@ -35,7 +35,9 @@ mov bl, byte [SEC_CLUS]
 sub ax, bx
 mov word [Start_Cluster], ax
 
+; Load kernel. Kernel must exist entirely within the low 64k sectors of disk.
 call Load_File
+mov di, Print
 jmp 0x7000:0
 
 Halt:
@@ -127,12 +129,14 @@ Load_File:
     mov ax, 11
 .ScanRootDir:
     push ax
+    push dx
     mov ax, word [BYTE_SEC]
     xor cx, cx
     mov cl, byte [SEC_CLUS]
     mul cx
     add ax, 0x7e00
     mov cx, ax
+    pop dx
     pop ax
     cmp di, cx
     je .NotFound
@@ -178,11 +182,13 @@ Load_File:
     xor dx, dx ; set up transfer buffer to load data to where the kernel expects to be in memory
     ; cx will contain how many bytes we load each time
     push ax
+    push dx
     mov ax, word [BYTE_SEC]
     xor cx, cx
     mov cl, byte [SEC_CLUS]
     mul cx
     mov cx, ax
+    pop dx
     pop ax
 .LoadLoop:
     mov ax, word [di]
@@ -211,6 +217,7 @@ NoKernel: db "Kernel Not Found!", 0
 DRE: db "DRE!", 0
 Kernel_Name: db "Kernel  sys"
 KernelTooBig: db "Kernel Too Big!", 0
+Test: db "A", 0
 Start_Cluster: dw 0
 
 align 16,db 0

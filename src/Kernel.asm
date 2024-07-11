@@ -1,27 +1,32 @@
 [org 0x70000]
-[cpu 186]
+[cpu 286]
 
 ; Boot Code
 mov ax, 0x7000
 mov ds, ax
 
-; necessary functions
-MCOPY: ; es:si source memory location, fs:di destination memory location, ax number of bytes to transfer
-    push bx
+mov si, Hello_World
+call Print
+
+Halt:
+    cli
+    hlt
+
+Print: ; si contains address of null-terminated string to print
+    pusha
+    mov ah, 0x0e
+    mov bh, 0
+    mov bl, 0x03
 .loop1:
-    or ax, ax
+    mov al, byte [si]
+    or al, al
     jz .end
-    mov bl, byte [es:si]
-    mov byte [fs:di], bl
-    dec ax
+    int 0x10
+    inc si
     jmp .loop1
 .end:
-    pop bx
+    popa
     ret
 
-; INTERRUPT HANDLERS
-INT80:  ; DRAW CHARACTER
-        ; INPUTS: ah = character color, al = character ascii, bh = Y position, bl = X position
-    
-
 ; GLOBAL DATA
+Hello_World: db "Hello World!", 0
