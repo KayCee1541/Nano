@@ -9,7 +9,7 @@
 (c) 2024
 
 What is Project Nano?
-Project Nano is an attempt to get a secure, multitasking, gui operating system on the intel 80286
+Project Nano is an attempt to get a secure, multitasking, gui operating system on the intel 80186
 
 Project Goals:
 - compatible with i286+
