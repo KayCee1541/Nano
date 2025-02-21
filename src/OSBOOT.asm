@@ -17,37 +17,52 @@ BPB:
     NUM_HEAD: dw 0
     HIDD_SEC: dd 0
     TOT_SECL: dd 0
-    DRIV_NUM: db 0 ; ignore value
+    DRIV_NUM: db 0 ; ignore value at boot
     FLAG_VAL: db 0 ; if this value equals zero, we are booting from a floppy
     SIGNATUR: db 0x28
     VID_SERI: dd 0
     VOL_LABL: db "           "
     SYS_IDEN: dq 0
 
+jmp 0:Start
 Start:
 ; set up stack
-mov ax, 0
+cli
+xor ax, ax
 mov ss, ax
 mov sp, 0x7c00
+sti
+
+; save drive number
+mov [DRIV_NUM], dl
 
 ; Write to screen
-mov ax, 0x00
+xor ax, ax
 mov ds, ax
 mov si, MESSAGE
 call PrintScr
+
+; verify returned from printscr
+mov al, 0x04
+out 0x7a, al
+mov al, 0xf0
+out 0x7b, al
+
+adf:
+    jmp adf
 cli
 hlt
 
-; Screen subroutine
-PrintScr: ; ds:si = address of string to write
+PrintScr: ; [ds:si] contains address for string
     push ax
     push bx
-    mov ah, 0x0e
-    mov bl, 0x07
+    cld
 .PrintChar:
-    mov al, [ds:si]
-    inc si
-    or al, al
+    mov ah, 0x0e
+    xor bh, bh
+    mov bl, 0x07
+    lodsb
+    and al, al
     jz .Exit
     int 0x10
     jmp .PrintChar
@@ -56,7 +71,7 @@ PrintScr: ; ds:si = address of string to write
     pop ax
     ret
 
-MESSAGE: db "THIS IS A TEST OF THE BOOTLOADER AND DISK FORMATTING ROUTINES. HALTING...", 0
+MESSAGE: db "TESTING", 0
 
 times 510-($-$$) db 0
 db 0x55, 0xaa
