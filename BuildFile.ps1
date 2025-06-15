@@ -15,7 +15,9 @@ foreach ($i in $files) {
         $res = $i.Replace('.asm','.exc')
     }
     else {
-        $res = $i.Replace('.asm','-.bin')
+        $res = $i.Replace('.asm','.com')
     }
     nasm -f bin ("./src/"+$i) -o ("./build/"+$res)
 }
+
+Rename-Item -Path "./build/OSBOOT.com" -NewName "OSBOOT-.bin"

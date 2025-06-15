@@ -1,3 +1,14 @@
 FILESYSTEM:
-
 Fat16 filesystem
+
+.exc version 1 File Format:
+Offset  | Length    | Description
+0x00    | 4         | Magic String "EXC1"
+0x04    | 2         | Code Segment Address
+0x06    | 2         | Data Segment Address
+0x08    | 2         | Stack Segment Address
+0x0a    | 2         | Code Segment Length
+0x0c    | 2         | Data Segment Length
+0x0e    | 2         | Executable Attributes
+0x10    | ...       | Code Segment
+...     | ...       | Data Segment

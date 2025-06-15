@@ -36,42 +36,7 @@ sti
 ; save drive number
 mov [DRIV_NUM], dl
 
-; Write to screen
-xor ax, ax
-mov ds, ax
-mov si, MESSAGE
-call PrintScr
 
-; verify returned from printscr
-mov al, 0x04
-out 0x7a, al
-mov al, 0xf0
-out 0x7b, al
-
-adf:
-    jmp adf
-cli
-hlt
-
-PrintScr: ; [ds:si] contains address for string
-    push ax
-    push bx
-    cld
-.PrintChar:
-    mov ah, 0x0e
-    xor bh, bh
-    mov bl, 0x07
-    lodsb
-    and al, al
-    jz .Exit
-    int 0x10
-    jmp .PrintChar
-.Exit:
-    pop bx
-    pop ax
-    ret
-
-MESSAGE: db "TESTING", 0
 
 times 510-($-$$) db 0
 db 0x55, 0xaa
