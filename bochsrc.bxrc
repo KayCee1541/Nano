@@ -7,7 +7,7 @@ romimage: file="C:\Program Files\Bochs-2.8\BIOS-bochs-latest", address=0x0000000
 vgaromimage: file="C:\Program Files\Bochs-2.8\VGABIOS-lgpl-latest"
 boot: floppy
 floppy_bootsig_check: disabled=0
-floppya: type=360k, 360k="C:\Users\KayCee\Desktop\Programming\OS\NanoOS\Disk.img", status=ejected, write_protected=0
+floppya: type=360k, 360k="C:\Users\KayCee\Desktop\Programming\OS\NanoOS\Disk.img", status=inserted, write_protected=0
 # no floppyb
 ata0: enabled=false
 ata1: enabled=false
@@ -31,7 +31,7 @@ cpuid: avx_fma=false, bmi=0, xop=false, fma4=false, tbm=false, x86_64=true, 1g_p
 cpuid: pcid=false, fsgsbase=false, smep=false, smap=false, mwait=true, vmx=1, svm=false
 print_timestamps: enabled=0
 debugger_log: -
-magic_break: enabled=1 0x0
+magic_break: enabled=1 0x8
 port_e9_hack: enabled=false, all_rings=false
 iodebug: all_rings=0
 private_colormap: enabled=0
